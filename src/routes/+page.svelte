@@ -317,7 +317,6 @@
     <div class="actions">
       <button on:click={submitTrackable}>Create</button>
     </div>
-    <p class="hint">Only boolean and range (1-5) trackables are supported.</p>
   </section>
 </div>
 
