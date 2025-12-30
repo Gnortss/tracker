@@ -1,0 +1,10 @@
+node_modules
+.build
+.svelte-kit
+.vscode
+.env
+.env.local
+.DS_Store
+dist
+worker-configuration.mjs
+wrangler-state
