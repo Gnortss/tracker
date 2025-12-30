@@ -8,6 +8,6 @@ DEFAULT_TZ = "UTC"
 ALLOWED_ORIGINS = ""
 
 [[d1_databases]]
-binding = "DB"
+binding = "tracker_db"
 database_name = "tracker-db"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "dcf4bcd4-da6b-4a04-b3bb-c0171099e337"
