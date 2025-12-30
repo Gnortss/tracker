@@ -2,6 +2,10 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { Trackable, TrackableConfig, TrackableWithValue, ValueType, StatsTodayPayload, StatsRangePayload } from '$lib/types';
 import { isValidDate, daysAgo, rangeDays } from './dates';
 
+const RANGE_MIN = 1;
+const RANGE_MAX = 5;
+const RANGE_DEFAULT = 3;
+
 const parseConfig = (configJson: string): TrackableConfig => {
   try {
     const parsed = JSON.parse(configJson);
@@ -13,96 +17,88 @@ const parseConfig = (configJson: string): TrackableConfig => {
 
 const configToJson = (config: TrackableConfig): string => JSON.stringify(config ?? {});
 
-const defaultForType = (valueType: ValueType): boolean | number | string | null => {
+const coerceValueType = (valueType: string): ValueType => {
+  if (valueType === 'boolean') return 'boolean';
+  return 'range';
+};
+
+const clampRange = (value: number): number => Math.min(RANGE_MAX, Math.max(RANGE_MIN, value));
+
+const normalizeConfigForType = (valueType: ValueType, config?: TrackableConfig): TrackableConfig => {
+  const cfg = config ?? {};
+  if (valueType === 'boolean') {
+    return { ...cfg, default: typeof cfg.default === 'boolean' ? cfg.default : false };
+  }
+  const rawDefault = typeof cfg.default === 'number' && Number.isFinite(cfg.default) ? Math.trunc(cfg.default) : RANGE_DEFAULT;
+  return { ...cfg, min: RANGE_MIN, max: RANGE_MAX, default: clampRange(rawDefault) };
+};
+
+const defaultForType = (valueType: ValueType): boolean | number | null => {
   switch (valueType) {
     case 'boolean':
       return false;
-    case 'int':
-    case 'number':
-      return 0;
-    case 'text':
-    case 'enum':
-      return '';
+    case 'range':
+      return RANGE_DEFAULT;
     default:
       return null;
   }
 };
 
-export const defaultValueFor = (trackable: Trackable): boolean | number | string | null => {
-  const cfg = trackable.config ?? {};
+export const defaultValueFor = (trackable: Trackable): boolean | number | null => {
+  const cfg = normalizeConfigForType(trackable.value_type, trackable.config);
   if (cfg.default === undefined || cfg.default === null) return defaultForType(trackable.value_type);
   if (trackable.value_type === 'boolean') return Boolean(cfg.default);
-  if (trackable.value_type === 'int') return Math.trunc(Number(cfg.default));
-  if (trackable.value_type === 'number') return Number(cfg.default);
-  return typeof cfg.default === 'string' ? cfg.default : String(cfg.default ?? '');
+  if (trackable.value_type === 'range') return clampRange(Math.trunc(Number(cfg.default)));
+  return null;
 };
 
 type EntryRow = {
   trackable_id: string;
   date: string;
-  value_type: ValueType;
+  value_type: ValueType | 'int';
   value_bool: number | null;
   value_int: number | null;
   value_num: number | null;
   value_text: string | null;
 };
 
-const typedValueFromRow = (row: EntryRow): boolean | number | string | null => {
+const typedValueFromRow = (row: EntryRow): boolean | number | null => {
   switch (row.value_type) {
     case 'boolean':
       return Boolean(row.value_bool);
     case 'int':
+    case 'range':
       return row.value_int ?? null;
-    case 'number':
-      return row.value_num ?? null;
     default:
-      return row.value_text ?? null;
+      return null;
   }
 };
 
-const normalizeValue = (value: unknown, trackable: Trackable): { ok: true; value: boolean | number | string | null } | { ok: false; error: string } => {
-  const cfg = trackable.config ?? {};
+const normalizeValue = (value: unknown, trackable: Trackable): { ok: true; value: boolean | number | null } | { ok: false; error: string } => {
+  const cfg = normalizeConfigForType(trackable.value_type, trackable.config);
   switch (trackable.value_type) {
     case 'boolean':
       if (typeof value !== 'boolean') return { ok: false, error: 'Expected boolean' };
       return { ok: true, value };
-    case 'int': {
+    case 'range': {
       const num = Number(value);
       if (!Number.isInteger(num)) return { ok: false, error: 'Expected integer' };
-      if (cfg.min !== undefined && num < cfg.min) return { ok: false, error: 'OUT_OF_RANGE' };
-      if (cfg.max !== undefined && num > cfg.max) return { ok: false, error: 'OUT_OF_RANGE' };
+      if (num < RANGE_MIN || num > RANGE_MAX) return { ok: false, error: 'OUT_OF_RANGE' };
       return { ok: true, value: num };
     }
-    case 'number': {
-      const num = Number(value);
-      if (Number.isNaN(num)) return { ok: false, error: 'Expected number' };
-      if (cfg.min !== undefined && num < cfg.min) return { ok: false, error: 'OUT_OF_RANGE' };
-      if (cfg.max !== undefined && num > cfg.max) return { ok: false, error: 'OUT_OF_RANGE' };
-      return { ok: true, value: num };
-    }
-    case 'enum':
-      if (typeof value !== 'string') return { ok: false, error: 'Expected string' };
-      if (cfg.allowed && !cfg.allowed.includes(value)) return { ok: false, error: 'INVALID_VALUE' };
-      return { ok: true, value };
-    case 'text':
-      if (typeof value !== 'string') return { ok: false, error: 'Expected string' };
-      if (cfg.maxLength !== undefined && value.length > cfg.maxLength) return { ok: false, error: 'OUT_OF_RANGE' };
-      return { ok: true, value };
     default:
       return { ok: false, error: 'INVALID_VALUE' };
   }
 };
 
-const toEntryBindings = (trackable: Trackable, value: boolean | number | string | null) => {
+const toEntryBindings = (trackable: Trackable, value: boolean | number | null) => {
   switch (trackable.value_type) {
     case 'boolean':
       return { value_bool: value ? 1 : 0, value_int: null, value_num: null, value_text: null };
-    case 'int':
+    case 'range':
       return { value_bool: null, value_int: Number(value), value_num: null, value_text: null };
-    case 'number':
-      return { value_bool: null, value_int: null, value_num: Number(value), value_text: null };
     default:
-      return { value_bool: null, value_int: null, value_num: null, value_text: value === null ? null : String(value) };
+      return { value_bool: null, value_int: null, value_num: null, value_text: null };
   }
 };
 
@@ -113,17 +109,21 @@ export const fetchTrackables = async (db: D1Database): Promise<Trackable[]> => {
        FROM trackables WHERE deleted_at IS NULL ORDER BY sort_order ASC, name ASC`
     )
     .all();
-  return (result.results ?? []).map((row: any) => ({
-    id: row.id,
-    key: row.key ?? null,
-    name: row.name,
-    kind: row.kind,
-    value_type: row.value_type as ValueType,
-    config: parseConfig(row.config_json),
-    icon: row.icon ?? null,
-    color: row.color ?? null,
-    sort_order: row.sort_order ?? 0
-  }));
+  return (result.results ?? []).map((row: any) => {
+    const valueType = coerceValueType(String(row.value_type ?? 'range'));
+    const config = normalizeConfigForType(valueType, parseConfig(row.config_json));
+    return {
+      id: row.id,
+      key: row.key ?? null,
+      name: row.name,
+      kind: row.kind,
+      value_type: valueType,
+      config,
+      icon: row.icon ?? null,
+      color: row.color ?? null,
+      sort_order: row.sort_order ?? 0
+    };
+  });
 };
 
 export const getTrackableById = async (db: D1Database, id: string): Promise<Trackable | null> => {
@@ -135,13 +135,15 @@ export const getTrackableById = async (db: D1Database, id: string): Promise<Trac
     .bind(id)
     .first();
   if (!row) return null;
+  const valueType = coerceValueType(String(row.value_type ?? 'range'));
+  const config = normalizeConfigForType(valueType, parseConfig(row.config_json));
   return {
     id: row.id,
     key: row.key ?? null,
     name: row.name,
     kind: row.kind,
-    value_type: row.value_type as ValueType,
-    config: parseConfig(row.config_json),
+    value_type: valueType,
+    config,
     icon: row.icon ?? null,
     color: row.color ?? null,
     sort_order: row.sort_order ?? 0
@@ -157,13 +159,15 @@ export const getTrackableByKey = async (db: D1Database, key: string): Promise<Tr
     .bind(key)
     .first();
   if (!row) return null;
+  const valueType = coerceValueType(String(row.value_type ?? 'range'));
+  const config = normalizeConfigForType(valueType, parseConfig(row.config_json));
   return {
     id: row.id,
     key: row.key ?? null,
     name: row.name,
     kind: row.kind,
-    value_type: row.value_type as ValueType,
-    config: parseConfig(row.config_json),
+    value_type: valueType,
+    config,
     icon: row.icon ?? null,
     color: row.color ?? null,
     sort_order: row.sort_order ?? 0
@@ -227,13 +231,13 @@ export const rangeStats = async (db: D1Database, days: number, endDate: string):
     )
     .bind(start, end)
     .all<EntryRow>();
-  const map: Record<string, Record<string, boolean | number | string | null>> = {};
+  const map: Record<string, Record<string, boolean | number | null>> = {};
   (rows.results as EntryRow[]).forEach((row) => {
     if (!map[row.trackable_id]) map[row.trackable_id] = {};
     map[row.trackable_id][row.date] = typedValueFromRow(row);
   });
 
-  const defaults: Record<string, boolean | number | string | null> = {};
+  const defaults: Record<string, boolean | number | null> = {};
   trackables.forEach((t) => {
     defaults[t.id] = defaultValueFor(t);
   });
@@ -263,7 +267,7 @@ export const createTrackable = async (
 ): Promise<Trackable> => {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
-  const config = input.config ?? {};
+  const config = normalizeConfigForType(input.value_type, input.config);
   await db
     .prepare(
       `INSERT INTO trackables (id, key, name, kind, value_type, config_json, icon, color, sort_order, created_at, updated_at)
@@ -315,6 +319,7 @@ export const updateTrackable = async (
     ...('color' in updates ? { color: updates.color ?? null } : {}),
     ...('sort_order' in updates && updates.sort_order !== undefined ? { sort_order: updates.sort_order } : {})
   };
+  next.config = normalizeConfigForType(next.value_type, next.config);
   const now = new Date().toISOString();
   await db
     .prepare(
@@ -394,5 +399,6 @@ export const validateTrackableInput = (input: any): { ok: boolean; message?: str
   for (const key of required) {
     if (!input[key]) return { ok: false, message: `Missing ${key}` };
   }
+  if (!['boolean', 'range'].includes(input.value_type)) return { ok: false, message: 'Unsupported value_type' };
   return { ok: true };
 };

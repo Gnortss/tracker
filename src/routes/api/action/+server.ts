@@ -57,6 +57,9 @@ export const POST: RequestHandler = async ({ request, platform }) => {
       }
       case 'trackable.update': {
         if (!body.id) return fail('INVALID_VALUE', 'id is required');
+        if (body.value_type && !['boolean', 'range'].includes(body.value_type)) {
+          return fail('INVALID_VALUE', 'Unsupported value_type');
+        }
         const updated = await updateTrackable(platform.env.DB!, body.id, {
           name: body.name,
           key: body.key,

@@ -10,7 +10,9 @@
   let historyData: StatsRangePayload | null = null;
   let status = '';
   let error = '';
-  let days = 21;
+  let days = 7;
+
+  const rangeSteps = [1, 2, 3, 4, 5];
 
   const habitPreset = {
     name: '',
@@ -20,11 +22,11 @@
     config: { default: false }
   } as any;
 
-  const moodPreset = {
+  const rangePreset = {
     name: 'Mood',
     key: 'mood',
     kind: 'mood',
-    value_type: 'int',
+    value_type: 'range',
     config: { min: 1, max: 5, default: 3 }
   } as any;
 
@@ -59,6 +61,36 @@
     return () => unsub();
   });
 
+  const clampRange = (value: unknown) => {
+    if (value === null || value === undefined) return 3;
+    const num = Math.round(Number(value));
+    if (!Number.isFinite(num)) return 3;
+    return Math.min(5, Math.max(1, num));
+  };
+
+  const nextRangeValue = (value: unknown) => {
+    const current = clampRange(value);
+    return current >= 5 ? 1 : current + 1;
+  };
+
+  const formatDay = (day: string) => day.slice(5);
+
+  // const iconFor = (trackable: Trackable) => trackable.icon ?? trackable.name?.slice(0, 1) ?? '';
+  const iconFor = (trackable: Trackable) => '';
+
+  const historyValueFor = (trackable: Trackable, day: string) => {
+    if (!historyData) return null;
+    return historyData.values[trackable.id]?.[day] ?? historyData.defaults[trackable.id];
+  };
+
+  const toggleHistoryBoolean = async (trackable: Trackable, day: string, currentValue: boolean) => {
+    if (currentValue) {
+      await clearEntry(trackable, day);
+      return;
+    }
+    await setValue(trackable, day, true);
+  };
+
   const toggleHabit = async (trackable: Trackable) => {
     if (!todayData) return;
     const res = await postAction(token, {
@@ -73,7 +105,7 @@
     await loadAll();
   };
 
-  const setValue = async (trackable: Trackable, date: string, value: boolean | number | string) => {
+  const setValue = async (trackable: Trackable, date: string, value: boolean | number) => {
     const res = await postAction(token, {
       action: 'entry.set',
       trackable_id: trackable.id,
@@ -110,12 +142,24 @@
   const setPreset = (preset: any) => {
     trackableForm = { ...preset, config: { ...(preset.config ?? {}) } };
   };
+
+  const setValueType = (next: 'boolean' | 'range') => {
+    trackableForm = {
+      ...trackableForm,
+      value_type: next,
+      config: next === 'boolean' ? { default: false } : { min: 1, max: 5, default: 3 }
+    };
+  };
 </script>
 
 <div class="page">
-  <header>
-    <h1>Tracker</h1>
-    <div class="token">
+  <header class="hero">
+    <div class="hero-title">
+      <p class="eyebrow">Daily tracker</p>
+      <h1>Tracker</h1>
+      <p class="subtitle">Tap the tiles. Keep the rhythm.</p>
+    </div>
+    <div class="token-card">
       <label>
         API Token
         <input
@@ -138,47 +182,40 @@
       {#if todayData}<small>{todayData.date}</small>{/if}
     </div>
     {#if todayData}
-      <div class="trackables">
-        <h3>Habits</h3>
-        {#each todayData.trackables.filter((t) => t.kind === 'habit') as habit}
-          <div class="item">
-            <label>
-              <input
-                type="checkbox"
-                checked={Boolean(habit.value)}
-                on:change={() => toggleHabit(habit)}
-              />
+      <div class="today-grid">
+        {#each todayData.trackables.filter((t) => t.value_type === 'boolean') as habit}
+          <div class="tile-row">
+            <div class="tile-label">
               <span>{habit.name}</span>
-            </label>
+              <small>{habit.kind}</small>
+            </div>
+            <button
+              class="tile boolean {Boolean(habit.value) ? 'on' : 'off'}"
+              title={habit.name}
+              on:click={() => toggleHabit(habit)}
+            >
+              <span class="tile-icon">{iconFor(habit)}</span>
+            </button>
           </div>
         {/each}
-      </div>
-      <div class="trackables">
-        <h3>Other</h3>
-        {#each todayData.trackables.filter((t) => t.kind !== 'habit') as tracker}
-          <div class="item">
-            <label>{tracker.name}</label>
-            {#if tracker.value_type === 'int' || tracker.value_type === 'number'}
-              <input
-                type="number"
-                min={tracker.config.min}
-                max={tracker.config.max}
-                value={Number(tracker.value)}
-                on:change={(e) => setValue(tracker, todayData.date, Number((e.target as HTMLInputElement).value))}
-              />
-            {:else if tracker.value_type === 'enum'}
-              <select value={String(tracker.value)} on:change={(e) => setValue(tracker, todayData.date, (e.target as HTMLSelectElement).value)}>
-                {#each tracker.config.allowed ?? [] as opt}
-                  <option value={opt} selected={tracker.value === opt}>{opt}</option>
-                {/each}
-              </select>
-            {:else}
-              <input
-                type="text"
-                value={String(tracker.value ?? '')}
-                on:change={(e) => setValue(tracker, todayData.date, (e.target as HTMLInputElement).value)}
-              />
-            {/if}
+        {#each todayData.trackables.filter((t) => t.value_type === 'range') as tracker}
+          <div class="tile-row">
+            <div class="tile-label">
+              <span>{tracker.name}</span>
+              <small>{tracker.kind}</small>
+            </div>
+            <div class="range-row">
+              {#each rangeSteps as step}
+                <button
+                  class="tile range {clampRange(tracker.value) === step ? 'selected' : ''}"
+                  style={`--shade: var(--range-${step});`}
+                  title={`${tracker.name} ${step}`}
+                  on:click={() => setValue(tracker, todayData.date, step)}
+                >
+                  <span>{step}</span>
+                </button>
+              {/each}
+            </div>
           </div>
         {/each}
       </div>
@@ -201,50 +238,37 @@
       </label>
     </div>
     {#if historyData}
-      <div class="history">
+      <div class="history-table" style={`--cols: ${historyData.days.length};`}>
+        <div class="history-head">
+          <div class="history-title">Trackable</div>
+          {#each historyData.days as day}
+            <div class="history-date">{formatDay(day)}</div>
+          {/each}
+        </div>
         {#each historyData.trackables as tracker}
           <div class="history-row">
             <div class="history-name">{tracker.name}</div>
-            <div class="history-grid">
-              {#each historyData.days as day}
-                <div class="history-cell" title={`${tracker.name} ${day}`}>
-                  {#if tracker.value_type === 'boolean'}
-                    <input
-                      type="checkbox"
-                      checked={Boolean(historyData.values[tracker.id]?.[day] ?? historyData.defaults[tracker.id])}
-                      on:change={(e) =>
-                        (e.target as HTMLInputElement).checked
-                          ? setValue(tracker, day, true)
-                          : clearEntry(tracker, day)
-                      }
-                    />
-                  {:else if tracker.value_type === 'enum'}
-                    <select
-                      value={String(historyData.values[tracker.id]?.[day] ?? historyData.defaults[tracker.id] ?? '')}
-                      on:change={(e) => setValue(tracker, day, (e.target as HTMLSelectElement).value)}
-                    >
-                      {#each tracker.config.allowed ?? [] as opt}
-                        <option value={opt}>{opt}</option>
-                      {/each}
-                    </select>
-                  {:else}
-                    <input
-                      type={tracker.value_type === 'text' ? 'text' : 'number'}
-                      value={String(historyData.values[tracker.id]?.[day] ?? historyData.defaults[tracker.id] ?? '')}
-                      on:change={(e) =>
-                        setValue(
-                          tracker,
-                          day,
-                          tracker.value_type === 'text'
-                            ? (e.target as HTMLInputElement).value
-                            : Number((e.target as HTMLInputElement).value)
-                        )
-                      }
-                    />
-                  {/if}
-                </div>
-              {/each}
-            </div>
+            {#each historyData.days as day}
+              {@const value = historyValueFor(tracker, day)}
+              {#if tracker.value_type === 'boolean'}
+                <button
+                  class="tile boolean {Boolean(value) ? 'on' : 'off'}"
+                  title={`${tracker.name} ${day}`}
+                  on:click={() => toggleHistoryBoolean(tracker, day, Boolean(value))}
+                >
+                  <span class="tile-icon">{iconFor(tracker)}</span>
+                </button>
+              {:else}
+                <button
+                  class="tile range"
+                  style={`--shade: var(--range-${clampRange(value)});`}
+                  title={`${tracker.name} ${day}`}
+                  on:click={() => setValue(tracker, day, nextRangeValue(value))}
+                >
+                  <span>{clampRange(value)}</span>
+                </button>
+              {/if}
+            {/each}
           </div>
         {/each}
       </div>
@@ -258,7 +282,7 @@
       <h2>Add Trackable</h2>
       <div class="preset-buttons">
         <button on:click={() => setPreset(habitPreset)}>Habit preset</button>
-        <button on:click={() => setPreset(moodPreset)}>Mood preset</button>
+        <button on:click={() => setPreset(rangePreset)}>Mood preset</button>
       </div>
     </div>
     <div class="form-grid">
@@ -275,18 +299,15 @@
         <input type="text" bind:value={trackableForm.kind} />
       </label>
       <label>
-        Value Type
-        <select bind:value={trackableForm.value_type}>
-          <option value="boolean">boolean</option>
-          <option value="int">int</option>
-          <option value="number">number</option>
-          <option value="text">text</option>
-          <option value="enum">enum</option>
-        </select>
-      </label>
-      <label>
-        Default
-        <input type="text" bind:value={trackableForm.config.default} />
+        Type
+        <div class="type-toggle">
+          <button type="button" class:active={trackableForm.value_type === 'boolean'} on:click={() => setValueType('boolean')}>
+            boolean
+          </button>
+          <button type="button" class:active={trackableForm.value_type === 'range'} on:click={() => setValueType('range')}>
+            range (1-5)
+          </button>
+        </div>
       </label>
       <label>
         Sort order
@@ -296,16 +317,25 @@
     <div class="actions">
       <button on:click={submitTrackable}>Create</button>
     </div>
-    <p class="hint">For enums, provide comma-separated allowed values inside config.allowed via advanced edits in API payloads.</p>
+    <p class="hint">Only boolean and range (1-5) trackables are supported.</p>
   </section>
 </div>
 
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:wght@500;700&display=swap');
+
   :global(body) {
-    font-family: system-ui, sans-serif;
+    font-family: 'Space Grotesk', 'Trebuchet MS', sans-serif;
     margin: 0;
-    background: #f5f7fb;
-    color: #1f2a3d;
+    background: radial-gradient(circle at top, #f8f2e8 0%, #f1f4f8 55%, #e9eef4 100%);
+    color: #1b2430;
+  }
+  :global(:root) {
+    --range-1: #f4f5f6;
+    --range-2: #dde1e6;
+    --range-3: #c6ccd4;
+    --range-4: #aab2bd;
+    --range-5: #7f8b99;
   }
   .page {
     max-width: 1100px;
@@ -315,28 +345,43 @@
     flex-direction: column;
     gap: 1rem;
   }
-  header {
+  .hero {
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 1rem;
   }
-  h1 {
+  .hero-title h1 {
     margin: 0;
+    font-family: 'Fraunces', 'Georgia', serif;
+    font-size: clamp(2rem, 3vw, 2.8rem);
   }
-  .token {
+  .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    font-size: 0.7rem;
+    color: #7a8699;
+    margin: 0 0 0.35rem;
+  }
+  .subtitle {
+    margin: 0.4rem 0 0;
+    color: #3e4c5f;
+  }
+  .token-card {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: white;
+    border-radius: 14px;
+    box-shadow: 0 12px 24px rgba(19, 24, 38, 0.08);
   }
   input,
-  select,
   button {
     font-size: 1rem;
   }
-  input,
-  select {
+  input {
     padding: 0.4rem 0.6rem;
     border-radius: 6px;
     border: 1px solid #d0d5dd;
@@ -344,21 +389,21 @@
   button {
     padding: 0.5rem 0.8rem;
     border-radius: 6px;
-    border: 1px solid #3b82f6;
-    background: #3b82f6;
+    border: 1px solid #254e70;
+    background: #254e70;
     color: white;
     cursor: pointer;
   }
   button.ghost {
     background: transparent;
-    color: #1f2a3d;
+    color: #1b2430;
     border-color: #d0d5dd;
   }
   .panel {
     background: white;
     border-radius: 12px;
     padding: 1rem;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 14px 30px rgba(19, 24, 38, 0.08);
   }
   .panel-header {
     display: flex;
@@ -366,43 +411,97 @@
     align-items: center;
     gap: 1rem;
   }
-  .trackables .item {
+  .today-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+  }
+  .tile-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.4rem 0;
+    gap: 1rem;
   }
-  .trackables h3 {
-    margin-bottom: 0.25rem;
-    color: #334155;
+  .tile-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .tile-label small {
+    color: #7a8699;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 0.65rem;
+  }
+  .range-row {
+    display: flex;
+    gap: 0.4rem;
+  }
+  .tile {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    border: 2px solid transparent;
+    padding: 0;
+    background: var(--shade, #cfd6dd);
+    color: #1b2430;
+    display: grid;
+    place-items: center;
+    font-weight: 600;
+    transition: transform 120ms ease, box-shadow 120ms ease;
+  }
+  .tile:active {
+    transform: scale(0.96);
+  }
+  .tile.boolean.on {
+    background: #2f9b7a;
+    color: #f8fbff;
+    box-shadow: 0 10px 16px rgba(47, 155, 122, 0.25);
+  }
+  .tile.boolean.off {
+    background: #e45c5c;
+    color: #f8fbff;
+    box-shadow: 0 10px 16px rgba(228, 92, 92, 0.25);
+  }
+  .tile.range {
+    background: var(--shade, #cfd6dd);
+    color: #1b2430;
+  }
+  .tile.range.selected {
+    border-color: #1b2430;
+  }
+  .tile-icon {
+    font-size: 1.1rem;
   }
   .aggregates {
     margin-top: 0.5rem;
     font-weight: 600;
   }
-  .history {
+  .history-table {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.6rem;
+    margin-top: 0.75rem;
+    overflow-x: auto;
   }
+  .history-head,
   .history-row {
-    border-top: 1px solid #e5e7eb;
-    padding-top: 0.75rem;
+    display: grid;
+    grid-template-columns: 160px repeat(var(--cols), minmax(28px, 1fr));
+    gap: 0.4rem;
+    align-items: center;
+  }
+  .history-title {
+    font-weight: 600;
+  }
+  .history-date {
+    font-size: 0.75rem;
+    text-align: left;
+    color: #7a8699;
   }
   .history-name {
     font-weight: 600;
-    margin-bottom: 0.35rem;
-  }
-  .history-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 0.4rem;
-  }
-  .history-cell {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 0.4rem;
   }
   .form-grid {
     display: grid;
@@ -419,6 +518,19 @@
     margin-top: 0.75rem;
     display: flex;
     gap: 0.5rem;
+  }
+  .type-toggle {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .type-toggle button {
+    background: #f1f4f8;
+    color: #1b2430;
+    border-color: transparent;
+  }
+  .type-toggle button.active {
+    background: #254e70;
+    color: white;
   }
   .status {
     color: #0ea5e9;

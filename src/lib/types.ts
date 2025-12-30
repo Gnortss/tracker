@@ -1,12 +1,9 @@
-export type ValueType = 'boolean' | 'int' | 'number' | 'text' | 'enum';
+export type ValueType = 'boolean' | 'range';
 
 export type TrackableConfig = {
-  default?: boolean | number | string | null;
+  default?: boolean | number | null;
   min?: number;
   max?: number;
-  step?: number;
-  allowed?: string[];
-  maxLength?: number;
 };
 
 export interface Trackable {
@@ -22,7 +19,7 @@ export interface Trackable {
 }
 
 export interface TrackableWithValue extends Trackable {
-  value: boolean | number | string | null;
+  value: boolean | number | null;
   is_default: boolean;
 }
 
@@ -40,8 +37,8 @@ export interface StatsRangePayload {
   end_date: string;
   days: string[];
   trackables: Trackable[];
-  defaults: Record<string, boolean | number | string | null>;
-  values: Record<string, Record<string, boolean | number | string | null>>;
+  defaults: Record<string, boolean | number | null>;
+  values: Record<string, Record<string, boolean | number | null>>;
 }
 
 export type ApiSuccess<T> = { ok: true; data: T };
