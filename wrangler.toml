@@ -1,0 +1,13 @@
+name = "tracker-app"
+compatibility_date = "2024-10-01"
+pages_build_output_dir = ".svelte-kit/cloudflare"
+
+[vars]
+API_TOKEN = "change-me"
+DEFAULT_TZ = "UTC"
+ALLOWED_ORIGINS = ""
+
+[[d1_databases]]
+binding = "DB"
+database_name = "tracker-db"
+database_id = "00000000-0000-0000-0000-000000000000"
