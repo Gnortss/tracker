@@ -16,8 +16,12 @@ export const fetchToday = async (token: string): Promise<ApiResponse<StatsTodayP
   return handleResponse<StatsTodayPayload>(res);
 };
 
-export const fetchStats = async (token: string, days = 21): Promise<ApiResponse<StatsRangePayload>> => {
-  const res = await fetch(`/api/stats?days=${days}`, { headers: jsonHeaders(token) });
+export const fetchStats = async (
+  token: string,
+  days: number | 'all' = 21
+): Promise<ApiResponse<StatsRangePayload>> => {
+  const query = days === 'all' ? 'all' : String(days);
+  const res = await fetch(`/api/stats?days=${query}`, { headers: jsonHeaders(token) });
   return handleResponse<StatsRangePayload>(res);
 };
 

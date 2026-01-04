@@ -220,6 +220,10 @@ export const rangeStats = async (db: D1Database, days: number, endDate: string):
   const cappedDays = Math.min(Math.max(days, 1), 90);
   const end = endDate;
   const start = daysAgo(end, cappedDays - 1);
+  return rangeStatsForRange(db, start, end);
+};
+
+const rangeStatsForRange = async (db: D1Database, start: string, end: string): Promise<StatsRangePayload> => {
   const daysList = rangeDays(start, end);
   const trackables = await fetchTrackables(db);
   const rows = await db
@@ -250,6 +254,24 @@ export const rangeStats = async (db: D1Database, days: number, endDate: string):
     defaults,
     values: map
   };
+};
+
+const earliestDate = async (db: D1Database, fallback: string): Promise<string> => {
+  const entryRow = await db
+    .prepare(`SELECT MIN(date) as min_date FROM daily_entries`)
+    .first<{ min_date: string | null }>();
+  const trackRow = await db
+    .prepare(`SELECT MIN(substr(created_at, 1, 10)) as min_date FROM trackables WHERE deleted_at IS NULL`)
+    .first<{ min_date: string | null }>();
+  const candidates = [entryRow?.min_date, trackRow?.min_date].filter(Boolean) as string[];
+  if (!candidates.length) return fallback;
+  candidates.sort();
+  return candidates[0];
+};
+
+export const rangeStatsAll = async (db: D1Database, endDate: string): Promise<StatsRangePayload> => {
+  const start = await earliestDate(db, endDate);
+  return rangeStatsForRange(db, start, endDate);
 };
 
 export const createTrackable = async (
