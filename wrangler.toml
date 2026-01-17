@@ -6,7 +6,7 @@ pages_build_output_dir = ".svelte-kit/cloudflare"
 DEFAULT_TZ = "UTC"
 ALLOWED_ORIGINS = ""
 DEV_SEED_TOKEN = ""
-API_KEY_SECRET = ""
+API_KEY_SECRET = "test-secret"
 
 [[d1_databases]]
 binding = "DB"
