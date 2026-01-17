@@ -94,7 +94,6 @@ svg {
   padding: 4px 8px;
   background: var(--muted);
   border-radius: var(--radius-md);
-  border: 1px solid var(--border);
 }
 
 .api-key-mask {
@@ -104,6 +103,7 @@ svg {
   color: var(--muted-foreground);
   max-width: 120px;
   overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
 }
 
@@ -113,11 +113,11 @@ svg {
   justify-content: center;
   background: none;
   border: none;
-  padding: 6px;
+  padding: 0;
   cursor: pointer;
   color: var(--muted-foreground);
-  min-width: 40px;
-  min-height: 40px;
+  min-width: 32px;
+  min-height: 32px;
 }
 
 .icon-btn:disabled {
@@ -250,12 +250,13 @@ main {
 }
 
 .row-title {
-  font-size: 13px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--foreground);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-right: -44px;
   padding-right: 4px;
   display: flex;
   flex-direction: column;
@@ -280,12 +281,12 @@ main {
   width: var(--square-size);
   height: var(--square-size);
   margin: 0 auto;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   border: 1.5px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: 24px;
   font-weight: 700;
   color: rgba(0, 0, 0, 0.6);
   transition: all 0.2s ease;
@@ -338,6 +339,8 @@ main {
 
 .info-block {
   display: flex;
+  margin-left: -48px;
+  margin-right: 48px;
   flex-direction: column;
   align-items: flex-end;
   justify-content: center;
@@ -354,6 +357,8 @@ main {
 
 .row-actions {
   display: flex;
+  margin-left: -48px;
+  margin-right: 48px;
   justify-content: flex-end;
   gap: 8px;
 }
