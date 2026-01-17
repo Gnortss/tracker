@@ -63,12 +63,14 @@
   const syncDayCount = () => {
     if (!mainEl) return;
     const width = mainEl.clientWidth;
-    const fixed = 68 + 40 + 40 + 70 + 88 + 16;
+    const fixed = 112 + 70 + 88 + 42 + 24; // title + info + actions + buffer + padding
     const styles = getComputedStyle(document.documentElement);
-    const cellSize = Number.parseFloat(styles.getPropertyValue('--square-size')) || 60;
+    const cellSize = Number.parseFloat(styles.getPropertyValue('--square-size')) || 40;
     const gap = 2;
     const available = Math.max(0, width - fixed);
-    const next = Math.max(5, Math.min(7, Math.floor((available + gap) / (cellSize + gap))));
+    const minDays = 2;
+    const maxDays = 7;
+    const next = Math.max(minDays, Math.min(maxDays, Math.floor((available + gap) / (cellSize + gap))));
     if (next !== dayCount) {
       dayCount = next;
       if (isAuthenticated) loadDashboard();

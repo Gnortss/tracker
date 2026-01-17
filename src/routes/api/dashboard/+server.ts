@@ -15,7 +15,7 @@ export const GET: RequestHandler = async (event) => {
   const today = getTodayDate(auth.user.timezone);
   const daysParam = Number(event.url.searchParams.get('days') ?? '5');
   const pageParam = Number(event.url.searchParams.get('page') ?? '0');
-  const windowSize = Math.max(5, Math.min(7, Number.isInteger(daysParam) ? daysParam : 5));
+  const windowSize = Math.max(2, Math.min(7, Number.isInteger(daysParam) ? daysParam : 5));
   const page = Math.max(0, Number.isInteger(pageParam) ? pageParam : 0);
   const end = addDays(today, -page * windowSize);
   const start = addDays(end, -(windowSize - 1));
