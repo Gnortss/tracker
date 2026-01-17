@@ -1,46 +1,67 @@
-export type ValueType = 'boolean' | 'range';
-
-export type TrackableConfig = {
-  default?: boolean | number | null;
-  min?: number;
-  max?: number;
-};
-
-export interface Trackable {
-  id: string;
-  key: string | null;
-  name: string;
-  kind: string;
-  value_type: ValueType;
-  config: TrackableConfig;
-  icon: string | null;
-  color: string | null;
-  sort_order: number;
-}
-
-export interface TrackableWithValue extends Trackable {
-  value: boolean | number | null;
-  is_default: boolean;
-}
-
-export interface StatsTodayPayload {
-  date: string;
-  trackables: TrackableWithValue[];
-  aggregates: {
-    habits_done_today: number;
-    habits_total: number;
-  };
-}
-
-export interface StatsRangePayload {
-  start_date: string;
-  end_date: string;
-  days: string[];
-  trackables: Trackable[];
-  defaults: Record<string, boolean | number | null>;
-  values: Record<string, Record<string, boolean | number | null>>;
-}
-
 export type ApiSuccess<T> = { ok: true; data: T };
 export type ApiError = { ok: false; error: { code: string; message: string; details?: unknown } };
 export type ApiResponse<T> = ApiSuccess<T> | ApiError;
+
+export type UserSummary = {
+  email: string;
+  timezone: string;
+  apiKeyMasked: string;
+  apiKeyRevealAllowed: boolean;
+};
+
+export type Habit = {
+  id: string;
+  name: string;
+  sort_order: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Trackable = {
+  id: string;
+  name: string;
+  unit: string | null;
+  min_value: number;
+  max_value: number | null;
+  sort_order: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type HabitStats = {
+  yearly_completion: number;
+  monthly_completion: number;
+  best_streak: number;
+  current_streak: number;
+  missing_count: number;
+};
+
+export type TrackableStats = {
+  yearly_completion: number;
+  monthly_completion: number;
+  current_streak: number;
+  average_value: number | null;
+  missed_count: number;
+};
+
+export type DashboardPayload = {
+  user: UserSummary;
+  days: string[];
+  habits: Habit[];
+  trackables: Trackable[];
+  habit_entries: Record<string, Record<string, 1>>;
+  trackable_entries: Record<string, Record<string, number>>;
+  habit_stats: Record<string, HabitStats>;
+  trackable_stats: Record<string, TrackableStats>;
+};
+
+export type StatsPayload = {
+  year: number;
+  month: string;
+  days_elapsed_year: number;
+  days_elapsed_month: number;
+  habit_stats: Record<string, HabitStats>;
+  trackable_stats: Record<string, TrackableStats>;
+};

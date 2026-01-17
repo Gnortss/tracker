@@ -7,9 +7,10 @@ declare global {
     interface Platform {
       env?: {
         DB?: D1Database;
-        API_TOKEN?: string;
         DEFAULT_TZ?: string;
         ALLOWED_ORIGINS?: string;
+        DEV_SEED_TOKEN?: string;
+        API_KEY_SECRET?: string;
       };
     }
   }

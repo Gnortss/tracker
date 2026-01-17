@@ -9,8 +9,8 @@ const buildCorsHeaders = (origin: string | null, allowed: string | undefined) =>
   if (origins.includes('*') || origins.includes(origin)) {
     return {
       'Access-Control-Allow-Origin': origins.includes('*') ? '*' : origin,
-      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'
+      'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-API-Key',
+      'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS'
     };
   }
   return {} as Record<string, string>;

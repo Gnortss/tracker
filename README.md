@@ -1,88 +1,94 @@
-# Tracker (SvelteKit + Cloudflare D1)
+﻿# Tracker (SvelteKit + Cloudflare D1)
 
-A lightweight tracker for daily habits and other trackables (mood, enums, numbers, text). Built for Cloudflare Pages + Functions with a secure REST API and Home Assistant-friendly design.
+A compact daily tracker for habits and trackables, built for Cloudflare Pages + Functions with cookie sessions for the UI and API key access for integrations.
 
 ## Architecture
-- **Frontend**: SvelteKit SPA (no SSR) served via Cloudflare Pages Functions.
-- **API**: `/api/*` SvelteKit server routes secured with a static bearer token from `API_TOKEN`.
-- **Database**: Cloudflare D1 (SQLite) using a sparse daily entry model (defaults implied when no row exists).
-- **Hosting**: Cloudflare Pages + Functions with `@sveltejs/adapter-cloudflare` and `wrangler`.
-- **Time**: Dates are treated as date-only strings; `DEFAULT_TZ` controls the timezone for "today" (defaults to UTC).
+- Frontend: SvelteKit SPA (no SSR) deployed on Cloudflare Pages.
+- API: SvelteKit server routes under `/api/*` with session and API key auth.
+- Database: Cloudflare D1 (SQLite) using sparse daily entry tables.
+- Hosting: `@sveltejs/adapter-cloudflare` with Wrangler for local dev.
 
 ## Getting started (local dev)
-1. **Install dependencies**
+1. Install dependencies
    ```bash
    npm install
    ```
-2. **Create a D1 database**
+2. Create a D1 database
    ```bash
    wrangler d1 create tracker-db
    wrangler d1 execute tracker-db --file=./migrations/0001_init.sql
+   wrangler d1 execute tracker-db --file=./migrations/0002_api_key_encryption.sql
    ```
-3. **Configure environment**
-   - Copy `wrangler.toml` and set:
-     - `API_TOKEN` (required for all API calls)
-     - `DEFAULT_TZ` (optional, e.g., `America/New_York`)
+3. Configure environment
+   - Update `wrangler.toml` with your D1 `database_id`.
+   - Set variables (example in `.dev.vars`):
+     - `DEFAULT_TZ` (optional, e.g. `America/New_York`)
      - `ALLOWED_ORIGINS` (optional comma list for CORS)
-   - Bind the D1 database by updating `database_id` in `wrangler.toml`.
-4. **Run dev server**
+     - `DEV_SEED_TOKEN` (required to call the seed endpoint)
+     - `API_KEY_SECRET` (required to decrypt/reveal API keys)
+4. Seed demo data (optional)
+   ```bash
+   curl -X POST "http://127.0.0.1:5173/api/dev/seed" -H "X-Dev-Seed: dev-seed"
+   ```
+   Use the returned `email` and `password` to sign in.
+5. Run dev server
    ```bash
    npm run dev
    ```
-   The SPA will call the local API; provide the same `API_TOKEN` in the UI.
+
+## Auth model
+- Web UI uses cookie sessions stored in the `sessions` table.
+- API key auth is supported via `Authorization: Bearer <api_key>` or `X-API-Key`.
+- Passwords are hashed with `bcryptjs`.
+- API keys are stored as SHA-256 hashes plus an encrypted copy (AES-GCM using `API_KEY_SECRET`) to allow reveal after login.
+
+## Stats definitions
+- Yearly completion: done (or entry) days divided by elapsed days in the year.
+- Monthly completion: done (or entry) days divided by elapsed days in the month.
+- Habit missing count: elapsed month days minus done days.
+- Trackable missed count: elapsed month days minus entry days.
+- Streaks are measured as consecutive days ending today.
+
+## API summary
+All endpoints return `{ ok: boolean, data|error }`.
+
+### Auth
+- `POST /api/auth/login` `{ email, password }`
+- `POST /api/auth/signup` `{ email, password }`
+- `POST /api/auth/logout`
+- `GET /api/me`
+- `POST /api/api-key/reveal`
+- `POST /api/api-key/regenerate`
+
+### Habits
+- `GET /api/habits`
+- `POST /api/habits` `{ name }`
+- `PATCH /api/habits/:id` `{ name?, sort_order?, active? }`
+- `DELETE /api/habits/:id`
+- `PUT /api/habits/:id/entries/:day` `{ done }`
+
+### Trackables
+- `GET /api/trackables`
+- `POST /api/trackables` `{ name, unit?, min_value?, max_value? }`
+- `PATCH /api/trackables/:id` `{ name?, unit?, min_value?, max_value?, sort_order?, active? }`
+- `DELETE /api/trackables/:id`
+- `PUT /api/trackables/:id/entries/:day` `{ value }` (0 deletes the entry)
+
+### Dashboard + stats
+- `GET /api/dashboard?days=5&page=0`
+- `GET /api/stats?year=YYYY&month=YYYY-MM`
 
 ## Deploy to Cloudflare Pages
-1. **Build**
+1. Build
    ```bash
    npm run build
    ```
-2. **Publish**
-   - Set Pages project build to `npm run build` with output `.svelte-kit/cloudflare`.
-   - Configure environment variables (`API_TOKEN`, `DEFAULT_TZ`, `ALLOWED_ORIGINS`).
-   - Attach the D1 binding named `DB` and run the migration (`migrations/0001_init.sql`).
-
-## REST API
-All endpoints require `Authorization: Bearer <API_TOKEN>` and respond with `{ ok: boolean, data|error }`.
-
-### `GET /api/stats/today`
-Returns current date data with defaults applied and aggregates (habit progress).
-
-### `GET /api/stats?days=21`
-History window (default 21, max 90). Missing values imply defaults; `values` only includes stored non-default entries.
-
-### `POST /api/action`
-Single action endpoint:
-- `trackable.create`: `{ name, key?, kind, value_type, config?, icon?, color?, sort_order? }`
-- `trackable.update`: `{ id, ...fields }`
-- `trackable.delete`: `{ id }`
-- `entry.set`: `{ trackable_id|trackable_key, date:"YYYY-MM-DD", value }`
-- `entry.clear`: `{ trackable_id|trackable_key, date }`
-- `entry.toggle`: `{ trackable_id|trackable_key, date }` (boolean only)
-
-Validation errors surface as `{ ok:false, error:{ code, message } }` with codes like `INVALID_DATE`, `INVALID_VALUE`, `OUT_OF_RANGE`, `NOT_FOUND`, `UNAUTHORIZED`.
-
-## Data model
-- **trackables**: definitions (kind, value_type, config JSON, optional key for HA, sort order, soft delete).
-- **daily_entries**: sparse daily values (one row per non-default value). Default comes from `config.default` or type.
-
-## Home Assistant integration (outline)
-- **Sensors via polling**: Create a custom integration that polls `/api/stats/today` with the bearer token.
-  - Boolean habits -> `binary_sensor.habit_<key>` (state on/off from `value`).
-  - Other trackables -> `sensor.tracker_<key>` (state = typed value).
-  - Aggregates -> e.g., `sensor.habits_done_today` using `aggregates.habits_done_today`.
-- **Services**: Map `set_status` to `POST /api/action` with `"action":"entry.set"` and `clear_status` to `"entry.clear"`.
-- **Stable IDs**: Use `key` per trackable to keep HA entity IDs stable; `id` is also stable UUID.
-
-Example HA service payload:
-```yaml
-service: tracker.set_status
-data:
-  trackable_id: <id or key>
-  date: 2024-12-30
-  value: true
-```
+2. Configure Pages
+   - Build command: `npm run build`
+   - Output: `.svelte-kit/cloudflare`
+   - Env vars: `DEFAULT_TZ`, `ALLOWED_ORIGINS`
+   - Bind D1 database as `DB` and run the migration in `migrations/0001_init.sql`
 
 ## Notes
-- All API endpoints enforce bearer auth; missing/invalid tokens return 401 without stack traces.
-- CORS is same-origin by default. Set `ALLOWED_ORIGINS="https://your-ha.local"` to allow cross-origin calls.
-- Defaults are inferred; setting a value equal to default deletes the row (keeps storage sparse).
+- D1 schema matches `migrations/0001_init.sql`.
+- The UI is a single-page layout that mirrors `static_design.html`.
