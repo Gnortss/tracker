@@ -1,5 +1,6 @@
-﻿# Tracker (SvelteKit + Cloudflare D1)
+# Tracker (SvelteKit + Cloudflare D1)
 
+Vibe-coded project.
 A compact daily tracker for habits and trackables, built for Cloudflare Pages + Functions with cookie sessions for the UI and API key access for integrations.
 
 ## Architecture
@@ -92,3 +93,4 @@ All endpoints return `{ ok: boolean, data|error }`.
 ## Notes
 - D1 schema matches `migrations/0001_init.sql`.
 - The UI is a single-page layout that mirrors `static_design.html`.
+

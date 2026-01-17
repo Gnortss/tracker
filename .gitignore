@@ -9,4 +9,5 @@ node_modules
 dist
 worker-configuration.mjs
 wrangler-state
+.wrangler
 package-lock.json
