@@ -1,6 +1,7 @@
 import type { RequestHandler } from '@sveltejs/kit';
 import { fail, success } from '$lib/server/apiResponse';
 import { maskedApiKey, requireUser } from '$lib/server/auth';
+import { getApiKeySecret } from '$lib/server/env';
 import { addDays, getTodayDate, rangeDays } from '$lib/server/dates';
 import { listHabits, getHabitEntriesForRange } from '$lib/server/services/habits';
 import { listTrackables, getTrackableEntriesForRange } from '$lib/server/services/trackables';
@@ -25,7 +26,7 @@ export const GET: RequestHandler = async (event) => {
   const trackableEntries = await getTrackableEntriesForRange(db, trackables.map((t) => t.id), start, end);
   const stats = await computeStats(db, auth.user.id, today, habits, trackables, Number(today.slice(0, 4)), Number(today.slice(5, 7)));
 
-  const revealAllowed = Boolean(event.platform?.env?.API_KEY_SECRET);
+  const revealAllowed = Boolean(getApiKeySecret(event));
   return success({
     user: {
       email: auth.user.email,
